@@ -124,15 +124,13 @@ class WSRDownloader:
             await asyncio.sleep(3)
 
             # ── Step 2: Store selector (acquisition accounts only) ─────────
-            # After the first Log On, the portal may present a store dropdown
+            # After the first Log On, the portal presents a store dropdown
             # ("Select the store where you are currently working") before
-            # granting access.  Detect it by page text and click through.
+            # granting access. Just click Log On — no store selection needed.
             page_text = await self.page.evaluate('() => document.body.innerText')
             if 'Select the store where you are currently working' in page_text:
                 logger.info(f"[{PROFILE_LABEL}] Step 2: Store selector page detected — clicking through...")
 
-                # The pre-selected store is fine; we switch to Multi Store later.
-                # Just click the Log On button on this page.
                 store_logon_button = self.page.locator('input[value="Log On"]')
                 store_logon_count  = await store_logon_button.count()
 
@@ -140,7 +138,6 @@ class WSRDownloader:
                     await store_logon_button.click()
                     logger.info(f"[{PROFILE_LABEL}] Clicked 'Log On' on store selector page")
                 else:
-                    # Fallback: any submit button
                     submit = self.page.locator('input[type="submit"]').first
                     await submit.click()
                     logger.info(f"[{PROFILE_LABEL}] Clicked submit on store selector page")
@@ -149,8 +146,9 @@ class WSRDownloader:
                 await asyncio.sleep(3)
 
             # ── Verify we made it into the portal ─────────────────────────
+            # Accept any URL that is no longer on the logon page
             current_url = self.page.url.lower()
-            if 'mms_' in current_url and 'logon' not in current_url:
+            if 'logon' not in current_url and 'login' not in current_url:
                 logger.info(f"[{PROFILE_LABEL}] ✓ Login successful! Redirected to: {self.page.url}")
             else:
                 logger.error(f"[{PROFILE_LABEL}] Login may have failed. Current URL: {self.page.url}")
