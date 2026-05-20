@@ -1,0 +1,106 @@
+name: WSR Pipeline — Kerr-McCauley Acquisition
+
+on:
+  schedule:
+    - cron: '0 16 * * *'   # 8 AM PST  (4 PM UTC)
+    - cron: '0 14 * * *'   # 8 AM CST  (2 PM UTC)
+    - cron: '0 13 * * *'   # 8 AM EST  (1 PM UTC)
+    - cron: '0 20 * * *'   # 12 PM PST (8 PM UTC)
+
+  workflow_dispatch:
+    inputs:
+      week:
+        description: 'Week number (1-52) — leave empty for automatic'
+        required: false
+        type: number
+      year:
+        description: 'Year (e.g., 2025) — leave empty for automatic'
+        required: false
+        type: number
+
+jobs:
+  run-wsr-pipeline-km:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps
+
+      - name: Create .env file
+        run: |
+          echo "KM_SITE_USERNAME=${{ secrets.KM_SITE_USERNAME }}" >> .env
+          echo "KM_SITE_PASSWORD=${{ secrets.KM_SITE_PASSWORD }}" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "SLACK_WEB_HOOK_URL=${{ secrets.SLACK_WEB_HOOK_URL }}" >> .env
+          echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
+          echo "SENDER_PASSWORD=${{ secrets.SENDER_PASSWORD }}" >> .env
+          echo "RECIPIENT_EMAILS=${{ secrets.RECIPIENT_EMAILS }}" >> .env
+          echo "SMTP_SERVER=${{ secrets.SMTP_SERVER }}" >> .env
+          echo "SMTP_PORT=${{ secrets.SMTP_PORT }}" >> .env
+
+      - name: Run WSR Pipeline — Kerr-McCauley (Automatic)
+        if: ${{ !inputs.week && !inputs.year }}
+        env:
+          DEBUG: ''
+          PYTHONUNBUFFERED: '1'
+          WSR_PROFILE: 'km'
+        run: |
+          echo "🔄 Running Kerr-McCauley pipeline in AUTOMATIC mode"
+          python wsr_orchestrator_kerrmccauley.py
+
+      - name: Run WSR Pipeline — Kerr-McCauley (Manual Override)
+        if: ${{ inputs.week && inputs.year }}
+        env:
+          DEBUG: ''
+          PYTHONUNBUFFERED: '1'
+          WSR_PROFILE: 'km'
+        run: |
+          echo "🎯 Running Kerr-McCauley pipeline in MANUAL OVERRIDE mode"
+          echo "Week: ${{ inputs.week }}, Year: ${{ inputs.year }}"
+          python wsr_orchestrator_kerrmccauley.py --week ${{ inputs.week }} --year ${{ inputs.year }}
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: km-error-screenshots
+          path: |
+            *.png
+            wsr_downloads_km/
+          retention-days: 7
+
+      - name: Upload downloaded files
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: km-wsr-downloads
+          path: wsr_downloads_km/
+          retention-days: 3
+
+      - name: Create Run Summary
+        if: always()
+        run: |
+          echo "# WSR Pipeline — Kerr-McCauley Acquisition" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🏪 **Store Group**: Kerr-McCauley" >> $GITHUB_STEP_SUMMARY
+          echo "🔄 Processes current week + prior week (data cleanup)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -d "wsr_downloads_km" ]; then
+            file_count=$(ls wsr_downloads_km/*.xls* 2>/dev/null | wc -l)
+            echo "## ✅ Downloads: $file_count files (from last week processed)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ Check Slack for detailed results from both weeks." >> $GITHUB_STEP_SUMMARY
