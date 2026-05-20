@@ -126,29 +126,41 @@ class WSRDownloader:
             # ── Step 2: Store selector (acquisition accounts only) ─────────
             # After the first Log On, the portal presents a store dropdown
             # ("Select the store where you are currently working") before
-            # granting access. Just click Log On — no store selection needed.
+            # granting access. Must select any store before clicking Log On —
+            # the portal rejects the form if nothing is selected.
+            # It doesn't matter which store we pick; we switch to Multi Store
+            # view immediately after login anyway.
             page_text = await self.page.evaluate('() => document.body.innerText')
             if 'Select the store where you are currently working' in page_text:
-                logger.info(f"[{PROFILE_LABEL}] Step 2: Store selector page detected — clicking through...")
+                logger.info(f"[{PROFILE_LABEL}] Step 2: Store selector page detected — selecting first store...")
+
+                store_select = await self.page.query_selector('select')
+                if store_select:
+                    # Get all options and pick the first one with a real value
+                    options = await store_select.query_selector_all('option')
+                    for option in options:
+                        value = (await option.get_attribute('value') or '').strip()
+                        text  = (await option.text_content() or '').strip()
+                        if value and value != '0' and 'select' not in text.lower():
+                            await store_select.select_option(value=value)
+                            logger.info(f"[{PROFILE_LABEL}] Selected store: {text}")
+                            break
+                    await asyncio.sleep(1)
 
                 store_logon_button = self.page.locator('input[value="Log On"]')
-                store_logon_count  = await store_logon_button.count()
-
-                if store_logon_count > 0:
+                if await store_logon_button.count() > 0:
                     await store_logon_button.click()
-                    logger.info(f"[{PROFILE_LABEL}] Clicked 'Log On' on store selector page")
                 else:
-                    submit = self.page.locator('input[type="submit"]').first
-                    await submit.click()
-                    logger.info(f"[{PROFILE_LABEL}] Clicked submit on store selector page")
+                    await self.page.locator('input[type="submit"]').first.click()
+                logger.info(f"[{PROFILE_LABEL}] Clicked 'Log On' on store selector page")
 
                 await self.page.wait_for_load_state('networkidle', timeout=10000)
                 await asyncio.sleep(3)
 
             # ── Verify we made it into the portal ─────────────────────────
-            # Accept any URL that is no longer on the logon page
+            # Success = no longer on any variant of the logon/SelectStore page
             current_url = self.page.url.lower()
-            if 'logon' not in current_url and 'login' not in current_url:
+            if 'selectstore' not in current_url and ('logon' not in current_url or 'mms_' in current_url):
                 logger.info(f"[{PROFILE_LABEL}] ✓ Login successful! Redirected to: {self.page.url}")
             else:
                 logger.error(f"[{PROFILE_LABEL}] Login may have failed. Current URL: {self.page.url}")
