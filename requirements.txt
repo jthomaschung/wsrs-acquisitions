@@ -1,0 +1,29 @@
+# WSR Pipeline Dependencies
+
+# Web automation
+playwright==1.48.0
+
+# Data processing
+pandas==2.2.3
+numpy==1.26.4
+openpyxl==3.1.5
+
+# Database
+supabase==2.8.1
+
+# Environment and utilities
+python-dotenv==1.0.1
+requests==2.32.3
+
+# Console colors (optional)
+colorama==0.4.6
+
+# Excel .xls file support
+xlrd==2.0.1
+
+# Optional - for colored terminal output
+colorama>=0.4.6
+
+# Installation instructions:
+# 1. Install Python packages: pip install -r requirements.txt
+# 2. Install Playwright browsers: playwright install chromium
