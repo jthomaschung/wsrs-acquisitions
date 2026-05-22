@@ -158,9 +158,18 @@ class WSRDownloader:
                 await asyncio.sleep(3)
 
             # ── Verify we made it into the portal ─────────────────────────
-            # Success = no longer on any variant of the logon/SelectStore page
+            # Works for both KM (store selector step) and MM (direct login).
+            # Success = URL no longer has mode=SelectStore and we're past the
+            # logon page. MMS_Logon.aspx with no mode param = still on login.
             current_url = self.page.url.lower()
-            if 'selectstore' not in current_url and ('logon' not in current_url or 'mms_' in current_url):
+            on_logon_page = (
+                'mms_logon' in current_url and
+                'mode=selectstore' not in current_url and
+                'targeturl' not in current_url
+            ) or (
+                'logon' in current_url and 'mms_' not in current_url
+            )
+            if not on_logon_page:
                 logger.info(f"[{PROFILE_LABEL}] ✓ Login successful! Redirected to: {self.page.url}")
             else:
                 logger.error(f"[{PROFILE_LABEL}] Login may have failed. Current URL: {self.page.url}")
